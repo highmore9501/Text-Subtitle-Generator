@@ -13,19 +13,22 @@
  *   2. 按每句字数与预设语速（字/秒）计算时长，生成带时间轴的 SRT 文本。
  *
  * 英文模式（mode='en'，见 docs/添加英文字幕参考信息.md）走 generateEnglishSrt：
- *   1. 仅在 . ! ? ; : 标点后切分句子片段（保留句尾标点，不切单词）；
- *   2. 片段按顺序合并，每条字幕不超过 maxChars（默认 80）个字符（含空格）；
- *   3. 按字符耗时（charSec，默认 0.045 秒/字符）计时，时长钳位在
+ *   1. 在 . ! ? ; : 、英文逗号 , 及破折号/省略号（— – …）之后切分片段
+ *      （保留句尾标点）；不切单词、不在空格处强切；
+ *   2. 片段按顺序合并，每条字幕不超过 maxChars（默认 100）个字符（含空格）；
+ *      相邻断句点之间的内容若本身超过上限（罕见），整条保留、允许略超——
+ *      不切词也不在空格处切；
+ *   3. 按字符耗时（charSec，默认 0.055 秒/字符）计时，时长钳位在
  *      [minDurationMs=1200, maxDurationMs=6000] 毫秒，字幕间隔 gapMs=250 毫秒。
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) {
+  if (typeof module === "object" && module.exports) {
     module.exports = factory();
   } else {
     root.SrtGenerator = factory();
   }
-})(typeof self !== 'undefined' ? self : this, function () {
-  'use strict';
+})(typeof self !== "undefined" ? self : this, function () {
+  "use strict";
 
   /**
    * 分隔符集合：中英文逗号、句号、问号、感叹号、分号、冒号、顿号、
@@ -34,8 +37,24 @@
    * 如需严格只留“，。？, . ?”，删除下方对应字符即可。
    */
   var DELIMITERS = new Set([
-    '，', '。', '？', '！', '；', '：', '、', '…', '—', '～',
-    ',', '.', '?', '!', ';', ':', '–', '~'
+    "，",
+    "。",
+    "？",
+    "！",
+    "；",
+    "：",
+    "、",
+    "…",
+    "—",
+    "～",
+    ",",
+    ".",
+    "?",
+    "!",
+    ";",
+    ":",
+    "–",
+    "~",
   ]);
 
   function isDelimiter(ch) {
@@ -53,12 +72,12 @@
     // 换行符天然也是分隔符：先把 CRLF / 单独 CR 统一归一化为 \n，
     // 再按 \n 拆成行——每行是一个硬边界，行内再按标点回找断句，
     // 保证字幕文本里永远不会残留换行（SRT 内嵌换行会破坏格式）。
-    var normalized = String(text == null ? '' : text)
-      .replace(/\r\n/g, '\n')
-      .replace(/\r/g, '\n');
+    var normalized = String(text == null ? "" : text)
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n");
 
     var sentences = [];
-    var lines = normalized.split('\n');
+    var lines = normalized.split("\n");
 
     lines.forEach(function (line) {
       var n = line.length;
@@ -113,7 +132,10 @@
 
         // 去掉句尾的分隔符标点（可连续多个，如“观念：”→“观念”、
         // “设计的——”→“设计的”），让字幕显示更整洁；句中的标点不受影响。
-        while (sentence.length > 0 && isDelimiter(sentence[sentence.length - 1])) {
+        while (
+          sentence.length > 0 &&
+          isDelimiter(sentence[sentence.length - 1])
+        ) {
           sentence = sentence.slice(0, -1);
         }
         sentence = sentence.trim();
@@ -128,30 +150,31 @@
   }
 
   /**
-   * 英文断句标点集合：仅 . ! ? ; :（参考 docs/添加英文字幕参考信息.md）。
-   * 与中文模式不同：逗号、破折号等不做英文断句点，避免把从句拆得过碎。
+   * 英文断句标点集合：. ! ? ; : 、英文逗号 , 以及破折号/省略号（— – …）。
+   * 参考 docs/添加英文字幕参考信息.md；逗号为按产品要求补充的断句点。
+   * 注意：连字符 - 不在此集合（well-known 这类复合词不会被切开），
+   * 空格也不作为断句点。片段以这些标点收尾并保留该标点，合并时不切开单词。
    */
-  var EN_PUNCTUATION = new Set(['.', '!', '?', ';', ':']);
+  var EN_PUNCTUATION = new Set([".", "!", "?", ";", ":", ",", "—", "–", "…"]);
 
   function isEnPunctuation(ch) {
     return EN_PUNCTUATION.has(ch);
   }
 
   /**
-   * 把整段英文按标点切成“句子片段”（片段以标点结尾，保留句尾标点）。
-   * 等价于参考文档中的 Python 正则 (?<=[.!?;:])\s+ 切分：
-   * 仅在标点之后且后面跟空白（含换行）处断开，空白被吞掉，
-   * 任何情况下都不会在一个单词中间切开。
+   * 把整段英文按标点切成“句子/从句片段”（片段以标点结尾，保留句尾标点）。
+   * 断句点：. ! ? ; : , — – … 之后且后面跟空白（含换行）时断开，空白被吞掉。
+   * 任何情况下都不会切开单词，也不会在空格处强行断句。
    * @param {string} text 原始英文文本
    * @returns {string[]} 非空片段数组
    */
   function splitEnglishByPunct(text) {
-    var src = String(text == null ? '' : text)
-      .replace(/\r\n/g, '\n')
-      .replace(/\r/g, '\n');
+    var src = String(text == null ? "" : text)
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n");
 
     var fragments = [];
-    var buffer = '';
+    var buffer = "";
     var n = src.length;
     var i = 0;
 
@@ -163,7 +186,7 @@
         if (frag.length > 0) {
           fragments.push(frag);
         }
-        buffer = '';
+        buffer = "";
         i += 1;
         // 吞掉标点后面的整段空白（含换行），等价于 Python 的 \s+
         while (i < n && /\s/.test(src[i])) {
@@ -182,22 +205,24 @@
 
   /**
    * 把句子片段顺序合并成字幕：拼接后总字符数不超过 maxChars 即合并成一条，
-   * 超过则在上一个片段边界断开。因为片段只以标点为边界，所以永远不会切单词。
-   * 若某个片段单独就超过 maxChars（罕见的无标点超长文本），按参考文档脚本的
-   * 语义保留为整条，不强行截断单词。
+   * 超过则在上一个片段边界断开。片段只以标点为边界，所以永远不会切单词，
+   * 也不会在空格处断句。
+   * 若相邻两个断句点之间的内容本身就超过 maxChars（例如逗号到句号之间有一
+   * 段很长、内部再无标点的文字），该片段整条保留、允许略超上限——因为既
+   * 不能切单词，也不能在空格处切，这是唯一可行的选择。
    * @param {string[]} fragments 标点切分后的片段
    * @param {number} maxChars    每条字幕最大字符数（含空格）
    * @returns {string[]} 字幕文本数组
    */
   function mergeEnglishFragments(fragments, maxChars) {
     var result = [];
-    var buffer = '';
+    var buffer = "";
     fragments.forEach(function (frag) {
       if (!buffer) {
         buffer = frag;
         return;
       }
-      var combined = buffer + ' ' + frag;
+      var combined = buffer + " " + frag;
       if (combined.length <= maxChars) {
         buffer = combined;
       } else {
@@ -223,9 +248,9 @@
     var s = Math.floor((total % 60000) / 1000);
     var milli = total % 1000;
     function pad(v, len) {
-      return String(v).padStart(len, '0');
+      return String(v).padStart(len, "0");
     }
-    return pad(h, 2) + ':' + pad(m, 2) + ':' + pad(s, 2) + ',' + pad(milli, 3);
+    return pad(h, 2) + ":" + pad(m, 2) + ":" + pad(s, 2) + "," + pad(milli, 3);
   }
 
   /**
@@ -241,27 +266,31 @@
    */
   function generateSrt(text, options) {
     var opts = options || {};
-    if (opts.mode === 'en') {
+    if (opts.mode === "en") {
       return generateEnglishSrt(text, opts);
     }
     var maxChars = Math.max(1, Math.floor(Number(opts.maxChars) || 20));
     var speed = Number(opts.speed) > 0 ? Number(opts.speed) : 5;
     var gapMs = Number(opts.gapMs) >= 0 ? Number(opts.gapMs) : 200;
-    var minDurationMs = Number(opts.minDurationMs) >= 0 ? Number(opts.minDurationMs) : 500;
+    var minDurationMs =
+      Number(opts.minDurationMs) >= 0 ? Number(opts.minDurationMs) : 500;
     var startMs = Number(opts.startMs) > 0 ? Number(opts.startMs) : 0;
 
     var sentences = splitIntoSentences(text, maxChars);
-    var out = '';
+    var out = "";
     var cursor = startMs;
 
     sentences.forEach(function (sentence, i) {
-      var durationMs = Math.max(minDurationMs, Math.round((sentence.length / speed) * 1000));
+      var durationMs = Math.max(
+        minDurationMs,
+        Math.round((sentence.length / speed) * 1000),
+      );
       var start = cursor;
       var end = start + durationMs;
 
-      out += (i + 1) + '\n';
-      out += formatTimestamp(start) + ' --> ' + formatTimestamp(end) + '\n';
-      out += sentence + '\n\n';
+      out += i + 1 + "\n";
+      out += formatTimestamp(start) + " --> " + formatTimestamp(end) + "\n";
+      out += sentence + "\n\n";
 
       cursor = end + gapMs;
     });
@@ -276,8 +305,8 @@
    * @param {string} text 原始英文文本
    * @param {object} [options]
    *   mode          传 'en' 时由 generateSrt 分发到本函数
-   *   maxChars      每条字幕最大字符数（含空格），默认 80
-   *   charSec       字符耗时（秒/字符），默认 0.045
+   *   maxChars      每条字幕最大字符数（含空格），默认 100
+   *   charSec       字符耗时（秒/字符），默认 0.055
    *   gapMs         字幕间隔（毫秒），默认 250
    *   minDurationMs 单条最小时长（毫秒），默认 1200
    *   maxDurationMs 单条最大时长（毫秒），默认 6000
@@ -286,16 +315,18 @@
    */
   function generateEnglishSrt(text, options) {
     var opts = options || {};
-    var maxChars = Math.max(1, Math.floor(Number(opts.maxChars) || 80));
-    var charSec = Number(opts.charSec) > 0 ? Number(opts.charSec) : 0.045;
+    var maxChars = Math.max(1, Math.floor(Number(opts.maxChars) || 100));
+    var charSec = Number(opts.charSec) > 0 ? Number(opts.charSec) : 0.055;
     var gapMs = Number(opts.gapMs) >= 0 ? Number(opts.gapMs) : 250;
-    var minDurationMs = Number(opts.minDurationMs) >= 0 ? Number(opts.minDurationMs) : 1200;
-    var maxDurationMs = Number(opts.maxDurationMs) > 0 ? Number(opts.maxDurationMs) : 6000;
+    var minDurationMs =
+      Number(opts.minDurationMs) >= 0 ? Number(opts.minDurationMs) : 1200;
+    var maxDurationMs =
+      Number(opts.maxDurationMs) > 0 ? Number(opts.maxDurationMs) : 6000;
     var startMs = Number(opts.startMs) > 0 ? Number(opts.startMs) : 0;
 
     var fragments = splitEnglishByPunct(text);
     var segments = mergeEnglishFragments(fragments, maxChars);
-    var out = '';
+    var out = "";
     var cursor = startMs;
 
     segments.forEach(function (seg, i) {
@@ -304,9 +335,9 @@
       var start = cursor;
       var end = start + durationMs;
 
-      out += (i + 1) + '\n';
-      out += formatTimestamp(start) + ' --> ' + formatTimestamp(end) + '\n';
-      out += seg + '\n\n';
+      out += i + 1 + "\n";
+      out += formatTimestamp(start) + " --> " + formatTimestamp(end) + "\n";
+      out += seg + "\n\n";
 
       cursor = end + gapMs;
     });
@@ -322,6 +353,6 @@
     mergeEnglishFragments: mergeEnglishFragments,
     formatTimestamp: formatTimestamp,
     generateSrt: generateSrt,
-    generateEnglishSrt: generateEnglishSrt
+    generateEnglishSrt: generateEnglishSrt,
   };
 });
