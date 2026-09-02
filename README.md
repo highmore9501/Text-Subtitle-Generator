@@ -7,7 +7,7 @@ SRT 字幕文件。界面为 HTML 页面，启动时自动打开浏览器。
 
 ### 方式一：双击启动（推荐）
 
-双击 `启动工具.bat`，会自动启动本地服务并在默认浏览器中打开页面。
+双击 `text2subtitle.bat`，会自动启动本地服务并在默认浏览器中打开页面。
 （优先使用 Node.js；若未安装 Node，则回退到 Python 的 `http.server`。）
 
 ### 方式二：命令行启动
@@ -93,4 +93,5 @@ node test/core.test.js
 - 运行页面：任意现代浏览器（推荐 Chrome / Edge）。
 - 启动脚本：Node.js ≥ 12（或 Python 3 作为回退）。
 - 无任何 npm 依赖。
+
 # Text-Subtitle-Generator
