@@ -18,7 +18,7 @@
  *   2. 片段按顺序合并，每条字幕不超过 maxChars（默认 100）个字符（含空格）；
  *      相邻断句点之间的内容若本身超过上限（罕见），整条保留、允许略超——
  *      不切词也不在空格处切；
- *   3. 按字符耗时（charSec，默认 0.055 秒/字符）计时，时长钳位在
+ *   3. 按字符耗时（charSec，默认 0.057 秒/字符）计时，时长钳位在
  *      [minDurationMs=1200, maxDurationMs=6000] 毫秒，字幕间隔 gapMs=250 毫秒。
  */
 (function (root, factory) {
@@ -306,7 +306,7 @@
    * @param {object} [options]
    *   mode          传 'en' 时由 generateSrt 分发到本函数
    *   maxChars      每条字幕最大字符数（含空格），默认 100
-   *   charSec       字符耗时（秒/字符），默认 0.055
+   *   charSec       字符耗时（秒/字符），默认 0.057
    *   gapMs         字幕间隔（毫秒），默认 250
    *   minDurationMs 单条最小时长（毫秒），默认 1200
    *   maxDurationMs 单条最大时长（毫秒），默认 6000
@@ -316,7 +316,7 @@
   function generateEnglishSrt(text, options) {
     var opts = options || {};
     var maxChars = Math.max(1, Math.floor(Number(opts.maxChars) || 100));
-    var charSec = Number(opts.charSec) > 0 ? Number(opts.charSec) : 0.055;
+    var charSec = Number(opts.charSec) > 0 ? Number(opts.charSec) : 0.057;
     var gapMs = Number(opts.gapMs) >= 0 ? Number(opts.gapMs) : 250;
     var minDurationMs =
       Number(opts.minDurationMs) >= 0 ? Number(opts.minDurationMs) : 1200;
