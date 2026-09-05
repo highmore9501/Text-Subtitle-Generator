@@ -254,6 +254,58 @@
   }
 
   /**
+   * 从字幕文本中提取纯文本（去掉序号、时间轴、空行）。
+   * 支持常见 SRT/VTT 时间轴格式，只保留真正的字幕内容行。
+   * @param {string} subtitleText 原始字幕文本
+   * @returns {string} 纯文本（按字幕块逐行输出）
+   */
+  function extractPlainText(subtitleText) {
+    var normalized = String(subtitleText == null ? "" : subtitleText)
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n");
+
+    var blocks = normalized.split(/\n\s*\n/);
+    var lines = [];
+
+    blocks.forEach(function (block) {
+      var rows = block
+        .split("\n")
+        .map(function (line) {
+          return line.trim();
+        })
+        .filter(function (line) {
+          return line.length > 0;
+        });
+
+      if (rows.length === 0) {
+        return;
+      }
+
+      var textRows = rows.filter(function (line) {
+        // 纯数字序号
+        if (/^\d+$/.test(line)) {
+          return false;
+        }
+        // SRT/VTT 常见时间轴行
+        if (line.indexOf("-->") !== -1) {
+          return false;
+        }
+        // VTT 头信息与注释块
+        if (/^(WEBVTT|NOTE)$/i.test(line)) {
+          return false;
+        }
+        return true;
+      });
+
+      if (textRows.length > 0) {
+        lines.push(textRows.join(" "));
+      }
+    });
+
+    return lines.join("\n");
+  }
+
+  /**
    * 生成 SRT 文本。
    * @param {string} text 原始文本
    * @param {object} [options]
@@ -266,6 +318,9 @@
    */
   function generateSrt(text, options) {
     var opts = options || {};
+    if (opts.mode === "extract") {
+      return extractPlainText(text);
+    }
     if (opts.mode === "en") {
       return generateEnglishSrt(text, opts);
     }
@@ -352,6 +407,7 @@
     splitEnglishByPunct: splitEnglishByPunct,
     mergeEnglishFragments: mergeEnglishFragments,
     formatTimestamp: formatTimestamp,
+    extractPlainText: extractPlainText,
     generateSrt: generateSrt,
     generateEnglishSrt: generateEnglishSrt,
   };

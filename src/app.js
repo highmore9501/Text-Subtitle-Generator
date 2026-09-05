@@ -23,6 +23,8 @@
   var langMode = $("langMode");
   var maxCharsLabel = $("maxCharsLabel");
   var speedLabel = $("speedLabel");
+  var inputPaneTitle = $("inputPaneTitle");
+  var outputPaneTitle = $("outputPaneTitle");
 
   /** 当前选中的保存文件句柄（File System Access API） */
   var fileHandle = null;
@@ -56,6 +58,17 @@
       speedMin: 0.001,
       gapMs: 250,
     },
+    extract: {
+      maxCharsLabel: "每句字数上限（提取模式不使用）",
+      maxCharsTitle: "提取模式会忽略该参数",
+      maxChars: 20,
+      speedLabel: "语速（提取模式不使用）",
+      speedTitle: "提取模式会忽略该参数",
+      speed: 5,
+      speedStep: 0.1,
+      speedMin: 0.1,
+      gapMs: 200,
+    },
   };
 
   function currentMode() {
@@ -74,8 +87,27 @@
     speedInput.step = String(p.speedStep);
     speedInput.min = String(p.speedMin);
     gapMsInput.value = p.gapMs;
+    var isExtract = mode === "extract";
+    maxCharsInput.disabled = isExtract;
+    speedInput.disabled = isExtract;
+    gapMsInput.disabled = isExtract;
+
+    inputPaneTitle.textContent = isExtract ? "输入字幕内容（SRT）" : "输入文本";
+    outputPaneTitle.textContent = isExtract ? "提取结果（纯文本）" : "SRT 内容";
+    inputText.placeholder = isExtract
+      ? "在这里粘贴字幕文件内容（SRT）…\n\n提取后会去掉序号和时间轴，仅保留纯文本。"
+      : "在这里粘贴需要转换成字幕的文本…\n\n提示：按 Ctrl+Enter 可快速生成。";
+    srtPreview.placeholder = isExtract
+      ? "提取出的纯文本会显示在这里…"
+      : "生成的 SRT 内容会显示在这里…";
     setResult(
-      "已切换到" + (mode === "en" ? "英文字幕" : "中文字幕") + "模式。",
+      "已切换到" +
+        (mode === "en"
+          ? "英文字幕"
+          : mode === "extract"
+            ? "提取文本"
+            : "中文字幕") +
+        "模式。",
       true,
     );
   }
@@ -126,12 +158,13 @@
       return;
     }
     try {
+      var isExtract = currentMode() === "extract";
       fileHandle = await window.showSaveFilePicker({
-        suggestedName: "字幕.srt",
+        suggestedName: isExtract ? "提取文本.txt" : "字幕.srt",
         types: [
           {
-            description: "SRT 字幕文件",
-            accept: { "text/plain": [".srt"] },
+            description: isExtract ? "纯文本文件" : "SRT 字幕文件",
+            accept: { "text/plain": [isExtract ? ".txt" : ".srt"] },
           },
         ],
       });
@@ -163,19 +196,26 @@
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
     a.href = url;
-    a.download = "字幕.srt";
+    var fallbackName =
+      currentMode() === "extract" ? "提取文本.txt" : "字幕.srt";
+    a.download = fallbackName;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    setResult("未选择保存位置，已触发下载“字幕.srt”。", true);
+    setResult("未选择保存位置，已触发下载“" + fallbackName + "”。", true);
   }
 
   /* ---------- 生成 ---------- */
   function generate() {
     var text = inputText.value;
     if (!text.trim()) {
-      setResult("请先在上方输入需要转换的文本。", false);
+      setResult(
+        currentMode() === "extract"
+          ? "请先在左侧输入字幕内容（SRT）。"
+          : "请先在上方输入需要转换的文本。",
+        false,
+      );
       return undefined;
     }
     var srt = window.SrtGenerator.generateSrt(text, readSettings());
@@ -202,6 +242,24 @@
 
   /* ---------- 载入示例文本 ---------- */
   loadSampleBtn.addEventListener("click", async function () {
+    if (currentMode() === "extract") {
+      var extractSample =
+        "1\n00:00:00,000 --> 00:00:01,200\n这是第一句字幕。\n\n" +
+        "2\n00:00:01,400 --> 00:00:03,000\n这是第二句字幕，带一点内容。\n\n" +
+        "3\n00:00:03,200 --> 00:00:04,500\nThis is the third subtitle line.";
+      try {
+        var extractRes = await fetch("asset/字幕文件样本.srt");
+        if (extractRes.ok) {
+          extractSample = await extractRes.text();
+        }
+      } catch (e) {
+        // file:// 打开时 fetch 不可用，使用内置示例
+      }
+      inputText.value = extractSample;
+      setResult("字幕示例已载入，可点击“生成”提取纯文本。", true);
+      return;
+    }
+
     // 英文模式直接载入内置英文示例
     if (currentMode() === "en") {
       inputText.value =
@@ -237,4 +295,7 @@
     inputText.value = sample;
     setResult("示例文本已载入，可点击“生成”。", true);
   });
+
+  // 初始进入页面时按默认模式同步一遍 UI 状态
+  applyModeProfile(currentMode());
 })();

@@ -1,64 +1,118 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>文本 → SRT 字幕生成器</title>
-  <link rel="stylesheet" href="src/style.css">
-</head>
-<body>
-  <div class="app">
-    <header class="toolbar">
-      <h1>文本 → SRT 字幕生成器</h1>
-      <div class="settings">
-        <label>处理模式
-          <select id="langMode" title="选择按中文字幕或英文字幕规则生成">
-            <option value="zh" selected>中文字幕</option>
-            <option value="en">英文字幕</option>
-          </select>
-        </label>
-        <label><span id="maxCharsLabel">每句字数上限</span>
-          <input id="maxChars" type="number" min="1" max="200" value="20" title="到达该字数位置后往回找分隔符断句">
-        </label>
-        <label><span id="speedLabel">语速（字/秒）</span>
-          <input id="speed" type="number" min="0.1" step="0.1" value="5" title="每秒钟可读的字数，用于计算字幕时长">
-        </label>
-        <label>字幕间隔（毫秒）
-          <input id="gapMs" type="number" min="0" step="50" value="200" title="相邻两条字幕之间的间隔">
-        </label>
-        <button id="loadSample" type="button" class="btn" title="载入一段示例文本快速体验">载入示例</button>
-      </div>
-    </header>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>文本 → SRT 字幕生成器</title>
+    <link rel="stylesheet" href="src/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="toolbar">
+        <h1>文本 → SRT 字幕生成器</h1>
+        <div class="settings">
+          <label>
+            处理模式
+            <select id="langMode" title="选择按中文字幕或英文字幕规则生成">
+              <option value="zh" selected>中文字幕</option>
+              <option value="en">英文字幕</option>
+              <option value="extract">提取文本</option>
+            </select>
+          </label>
+          <label>
+            <span id="maxCharsLabel">每句字数上限</span>
+            <input
+              id="maxChars"
+              type="number"
+              min="1"
+              max="200"
+              value="20"
+              title="到达该字数位置后往回找分隔符断句"
+            />
+          </label>
+          <label>
+            <span id="speedLabel">语速（字/秒）</span>
+            <input
+              id="speed"
+              type="number"
+              min="0.1"
+              step="0.1"
+              value="5"
+              title="每秒钟可读的字数，用于计算字幕时长"
+            />
+          </label>
+          <label>
+            字幕间隔（毫秒）
+            <input
+              id="gapMs"
+              type="number"
+              min="0"
+              step="50"
+              value="200"
+              title="相邻两条字幕之间的间隔"
+            />
+          </label>
+          <button
+            id="loadSample"
+            type="button"
+            class="btn"
+            title="载入一段示例文本快速体验"
+          >
+            载入示例
+          </button>
+        </div>
+      </header>
 
-    <main class="main">
-      <section class="pane">
-        <div class="pane-title">输入文本</div>
-        <textarea id="inputText" spellcheck="false"
-          placeholder="在这里粘贴需要转换成字幕的文本…&#10;&#10;提示：按 Ctrl+Enter 可快速生成。"></textarea>
-      </section>
+      <main class="main">
+        <section class="pane">
+          <div class="pane-title" id="inputPaneTitle">输入文本</div>
+          <textarea
+            id="inputText"
+            spellcheck="false"
+            placeholder="在这里粘贴需要转换成字幕的文本…&#10;&#10;提示：按 Ctrl+Enter 可快速生成。"
+          ></textarea>
+        </section>
 
-      <div class="actions">
-        <button id="choosePath" type="button" class="btn btn-primary" title="打开资源管理器选择 SRT 文件的保存位置">
-          <span class="btn-label">资源管理器</span>
-          <span class="btn-hint">选择保存路径</span>
-        </button>
-        <button id="generateBtn" type="button" class="btn btn-primary btn-lg" title="生成 SRT 并保存/下载">生成</button>
-      </div>
+        <div class="actions">
+          <button
+            id="choosePath"
+            type="button"
+            class="btn btn-primary"
+            title="打开资源管理器选择 SRT 文件的保存位置"
+          >
+            <span class="btn-label">资源管理器</span>
+            <span class="btn-hint">选择保存路径</span>
+          </button>
+          <button
+            id="generateBtn"
+            type="button"
+            class="btn btn-primary btn-lg"
+            title="生成 SRT 并保存/下载"
+          >
+            生成
+          </button>
+        </div>
 
-      <section class="pane">
-        <div class="pane-title">SRT 内容</div>
-        <textarea id="srtPreview" readonly spellcheck="false"
-          placeholder="生成的 SRT 内容会显示在这里…"></textarea>
-      </section>
-    </main>
+        <section class="pane">
+          <div class="pane-title" id="outputPaneTitle">SRT 内容</div>
+          <textarea
+            id="srtPreview"
+            readonly
+            spellcheck="false"
+            placeholder="生成的 SRT 内容会显示在这里…"
+          ></textarea>
+        </section>
+      </main>
 
-    <footer class="status">
-      <span id="pathStatus">尚未选择保存位置（不选也可生成，将直接下载 字幕.srt）</span>
-      <span id="resultStatus"></span>
-    </footer>
-  </div>
+      <footer class="status">
+        <span id="pathStatus">
+          尚未选择保存位置（不选也可生成，将直接下载 字幕.srt）
+        </span>
+        <span id="resultStatus"></span>
+      </footer>
+    </div>
 
-  <script src="src/srt-generator.js"></script>
-  <script src="src/app.js"></script>
-</body>
+    <script src="src/srt-generator.js"></script>
+    <script src="src/app.js"></script>
+  </body>
 </html>
